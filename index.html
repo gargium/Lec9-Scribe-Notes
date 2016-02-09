@@ -46,11 +46,17 @@
   unlock(from);
 }</code></pre>
 				<p>Alright, now it looks like we're in better shape, but unfortunately we still have some problems. We're holding two locks at the same time. What happens when we've got a lock on account A and we are about to lock account B as well, but another thread has already locked B and is waiting for A? This situation is called <i>deadlock</i>. Following the goldilocks principle has the potential to create deadlock like this.</p>
-				<p>This also creates an efficiency problem, because if we need to examine more parts of the code, we'll have to individually lock every single part we want to look at! This creates extremely inefficient code, because while we have the lock, none of the other threads can get any work done. This type of lock is called a <i>spinlock</1>. In a spin lock, a thread will try to acquire a lock, and if the lock is already taken by some other thread, it will keep spinning (waiting) and chew up CPU time until it can grab the lock.  
+				<p>This also creates an efficiency problem, because if we need to examine more parts of the code, we'll have to individually lock every single part we want to look at! This creates extremely inefficient code, because while we have the lock, none of the other threads can get any work done. This type of lock is called a <i>spinlock</1>. In a spin lock, a thread will try to acquire a lock, and if the lock is already taken by some other thread, it will keep spinning (waiting) and chew up CPU time until it can grab the lock.</p>  
 				
 				<h4>Critical Section Implementation</h4>
-				<h5>On a single processor</h5>
-				<h5>On multiple processors</h5>
+					<h5>On a single processor</h5>
+						<p>We want our critical section to small enough so that it doesn't interfere with performance, but big enough so that it doesn't introduce races in our code. On a single processor, this isn't difficult, because there aren't any other cores or threads that we are competing with. Using the bank analogy example, consider when we want to deposit money into our account. This might look something like this:</p>
+						<pre><code>balance += amt; </code></pre>
+						<p>But an increment is actually a couple of instructions in machine language (we have to load the balance, increment it, and store it), so we need to make sure that all of these instructions complete and are not interrupted in the middle. On a single CPU machine, we can do it by: 
+							1. Disabling interrupts temporarily - if we disable the clock interrupt on our machine, the kernel won't give the CPU to some other thread and we can complete this task before we switch threads. 
+							2. Cooperative multitasking - we execute no instructions when entering or exiting the criical secion and ensure that the CPU is not given up in the middle of a critical section. 
+							</p> 
+					<h5>On multiple processors</h5>
 
 			</div>
 		</div>
