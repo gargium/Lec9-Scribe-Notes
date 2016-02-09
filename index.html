@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Lecture 9</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link href="//fonts.googleapis.com/css?family=Raleway:400,300,600" rel="stylesheet" type="text/css">
+	<link rel="stylesheet" href="css/normalize.css">
+	<link rel="stylesheet" href="css/skeleton.css">
+</head>
+<body>
+	<div class="container">
+		<div class="row">
+			<div class="twelve columns" style="margin-top: 10%; margin-bottom: 15%">
+				<h1>Lecture 9 Scribe Notes</h1>
+				<h5>CS 111 at UCLA | Winter 2016</h5>
+				<hr>
+				<h4>Goldilocks</h4>
+				<p>In this lecture, we mostly talked about mechanisms for dealing with and avoiding race conditions. This is done with a <i>lock</i>. A lock is a variable that tells the machine whether or not it is allowed to execute a section of code. If one thread locks a section of code, other threads will not be able to enter that section of code until the first thread has unlocked it. These lockable sections of code are called <i>critical sections</i>. There are two important things to keep in mind when dealing with critical sections. (Well, there are a lot more than two, but we'll just focus on these two for now.)</p>
+				<ol style="padding-left: 5%; padding-right: 5%">
+					<li>It is important that these critical sections not be too large, or they will slow down your program to an unnecessary degree.</li>
+					<li>It is important that these critical sections not be too small, or they will not include all of the code that should be locked and introduce race conditions.</li>
+				</ol>
+				<p>This need for balance is known as the <i>Goldilocks Principle</i>.</p>
+				<p>Consider this example: We have a program that manages bank accounts and has a function <code>transfer(from, to)</code> to make transfers between accounts. Suppose we implement this function in the following way.</p>
+				<pre><code>void transfer(account* from, account* to, int amount) {
+	from->balance -= amount;
+	to->balance += amount;
+}</code></pre>
+				<p>Can you see the problem here? It should be obvious to you; if we are transferring money to account A at the same time as someone else, we will run into trouble. A quick solution to this problem would be to wrap the actions on the accounts in locks so that only one thread can change be changing an account's balance at a time:</p>
+				<pre><code>void transfer(account* from, account* to, int amount) {
+	lock(from);
+		from->balance -= amount;
+	unlock(from);
+	lock(to);
+		to->balance += amount;
+	unlock(to);
+}</code></pre>
+				<p>This solution helps a bit, but it doesn't solve all of our problems. There is still a period, between the two locks, where we are not in a totally valid state. This is an example of critical sections that are too small. To solve this, we will wrap both of the actions at the same time:</p>
+				<pre><code>void transfer(account* from, account* to, int amount) {
+	lock(from);
+		lock(to);
+			from->balance -= amount;
+			to->balance += amount;
+		unlock(to);
+	unlock(from);
+}</code></pre>
+				<p>Alright, now it looks like we're in better shape, but unfortunately we still have some problems. We're holding two locks at the same time. What happens when we've got a lock on account A and we are about to lock account B as well, but another thread has already locked B and is waiting for A? This situation is called <i>deadlock</i>. Following the goldilocks principle has the potential to create deadlock like this.</p>
+			</div>
+		</div>
+	</div>
+</body>
+</html>
