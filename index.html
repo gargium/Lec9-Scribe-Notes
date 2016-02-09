@@ -52,10 +52,11 @@
 					<h5>On a single processor</h5>
 						<p>We want our critical section to small enough so that it doesn't interfere with performance, but big enough so that it doesn't introduce races in our code. On a single processor, this isn't difficult, because there aren't any other cores or threads that we are competing with. Using the bank analogy example, consider when we want to deposit money into our account. This might look something like this:</p>
 						<pre><code>balance += amt; </code></pre>
-						<p>But an increment is actually a couple of instructions in machine language (we have to load the balance, increment it, and store it), so we need to make sure that all of these instructions complete and are not interrupted in the middle. On a single CPU machine, we can do it by: 
-							1. Disabling interrupts temporarily - if we disable the clock interrupt on our machine, the kernel won't give the CPU to some other thread and we can complete this task before we switch threads. 
-							2. Cooperative multitasking - we execute no instructions when entering or exiting the criical secion and ensure that the CPU is not given up in the middle of a critical section. 
-							</p> 
+						<p>But an increment is actually a couple of instructions in machine language (we have to load the balance, increment it, and store it), so we need to make sure that all of these instructions complete and are not interrupted in the middle. On a single CPU machine, we can do it by:</p>
+						<ol style="padding-left: 5%; padding-right: 5%">	
+							<li>Disabling interrupts temporarily - if we disable the clock interrupt on our machine, the kernel won't give the CPU to some other thread and we can complete this task before we switch threads. 
+							<li>Cooperative multitasking - we execute no instructions when entering or exiting the criical section and ensure that the CPU is not given up in the middle of a critical section. 
+						</ol> 
 					<h5>On multiple processors</h5>
 
 			</div>
