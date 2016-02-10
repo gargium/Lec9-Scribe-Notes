@@ -79,7 +79,12 @@
 		return CHAR_MIN - 1; 
 	return p->buf[p->r++%1024];
 }</code></pre>
-						<p>On a threaded system, though, concurrency introduces the problem of scheduling reads and writes. Consider the problem of Thread A is trying to write to the pipe at the same time that Thread B is reading from it. We can fix this by using spin locks, so that if one thread has the lock, the other threads will have to wait to edit the pipe until that thread releases the lock.</p> 
+						<p>On a threaded system, though, concurrency introduces the problem of scheduling reads and writes. Consider the problem of Thread A is trying to write to the pipe at the same time that Thread B is reading from it. We can fix this by using <i>spinlocks</i>, so that if one thread has the lock, the other threads will have to wait to edit the pipe until that thread releases the lock. The other threads will keep chewing up CPU time until one is allowed to grab the lock. We must add a lock field to our pipe struct, since each pipe will have its own lock that lets it be modified or not.</p> 
+						<pre><code>struct pipe {
+	char buf[1024];
+	unsigned r, w;
+	lock_t l;  
+} </code></pre>
 						<pre><code>bool write_pipe(struct pipe *p, char c) {
 	lock(&p->l);
 	bool full = p->w - p->r == 1024;
