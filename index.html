@@ -172,6 +172,7 @@ void unlock (lock_t *l) {
 							<h5>Spin Lock Sizes</h5>
 								<p>How big should you make your spin lock? It depends on the hardware. On the x86 and x86-64, <code>int</code> works. 32 bit accesses are atomic as long as they’re aligned. The integers have to be on addresses of 4 so they are properly aligned.</p>
 
+
 						<h4>How are we going to get locks to work?</h4>
 							<h5>incl</h5>
 							<p>We need extra instructions for atomic access for “int”. The x86 and x86-64 have the following instruction (<code>x</code> is the address somewhere in memory):</p>
@@ -199,6 +200,70 @@ void unlock (lock_t *l) {
 							<p>This is a single instruction, so you can execute it and it will work atomically across multiple cores. We can also implement our <code>x = f(x)</code> primitive as follows:</p>
 							<pre><code>while(true)<br>	int old = x;<br>	int new = f(x);<br>	if(cas(&x,old,new))<br>		break;</code></pre>
 							<p><i>Note: Keep in mind, this code doesn’t care if</i> <code>x</code> <i>is changed by another issue. It will just keep looping.</i></p>
+
+
+						<!--NAQ'S SECTION:-->
+					<h5> Locking with Pipes </h5>
+						<pre><code> struct pipe{
+	char buf[1024]; // data 
+	lock_t l;
+}</code></pre>
+
+						<p> There are no locks in the data section of the pipe structure but the access to the data are protected by the accesses to the locks. In order to access the locks you use the machine intructions above such as compare and swap. </p>
+
+						<p> Currently the way readpipe and writepipe work is by first using a lock. Then we run the code for that specific thread. After that code has been run we unlock. The code that goes in between the lock and unlock is the critical section. Suppose we have multiple threads trying to access the same pipe. We can generalize this by saying that if N threads are trying to access the same pipe, then N-1 threads will spin. When a thread is spinning, its CPU will stay busy becuase it is constantly issuing machine instructions. EXPLAIN THIS MORE!!!!! </p>
+
+						<p> In order to save memory, suppose we change the implementation of the pipe to the following: </p>
+
+						<pre><code> struct pipe{
+	char buf[1024]; // data
+}
+lock_t global_lock;</code></pre>
+						<p> The readpipe and writepipe will work the same way as before. However, the only difference with this new implementation of the pipe struct is that the lock and unlock calls will use the global_lock. The critical section will still go between the lock and unlock calls similar to the original implemenation. This approach of using a single global lock for all pipes is called <b>course-grained locking. </b></p> 
+						<ul style="padding-left: 5%; padding-right: 5%">
+							<li> Advantage: Since there is only one lock for all pipes, this method is very easy to understand and implement. </li>
+							<li> Disadvantage: Using a global lock impacts perfomance by making the code slow. Also, access to the global lock becomes a performance bottleneck because anybody currently working on a pipe will prevent others from accessing that pipe. </li>
+						</ul>
+
+						<p> The previous pipe struct where there was one lock in each pipe struct is known as <b> fine-grained locking </b>. Using this method causes the complexity to go up, but there are fewer bottleneck situations.</p>
+
+						<p> Now consider a new pipe struct that has two locks; one for read access and one for write access.</p>
+						<pre><code> struct pipe{
+	char buf[1024]; // data
+	unsigned r, w;
+	lock_t rl; // read lock
+	lock_t wl; // write lock
+}</code></pre>
+
+						<p> In this case, the readpipe will add 1 to the r pointer and the writepipe will add 1 to the w pointer. In theory a reader from the pipe will not interfere with any writers fromt he pipe, so you can read and write from a pipe at the same time. <b> However </b> there is an error in this reasoning. The read and write pipes both need to look at the r and w values, so using two locks in each pipe struct will not work. Possibly if you are able to partition your data structure into two sucomponenets, then this method might make sense, but generally using two locks in a pipe struct is not good coding practice. Overall the most typical pattern for using locks is to have one lock per struct. </p>
+
+						<p> Now going back to the original pipe struct with one non-global lock. </p>
+						<pre><code> struct pipe{
+	char buf[1024]; // data
+	unsigned r, w;
+	lock_t l;
+}</code></pre>
+
+						<p> One issue with this approach is when you try to access a pipe, it will use up a lot of CPU time. For example, suppose there are many readers and a few writers. Here is the code that the readers will run: </p>
+						<pre><code> 
+	while((c = read_pipe) == CHAR_MIN-1)
+		continue; 
+}</code></pre>
+
+						<p> If there are a lot more readers than writers, then the readers will continue to read from pipes even though there is no data that needs to be read. Therefore the readers are unneccessarily using up CPU time. In order to fix this issue of using up unneeded CPU time, we can use the yield() as follows: </p>
+						<pre><code> 
+	while((c = read_pipe) == CHAR_MIN-1)
+		yield(); 
+}</code></pre>
+
+						<p> The yield call tells the CPU to switch to a different thread that will do more useful work. However even using the yield call will cause some issues. For example consider a case where there are some writer processes, reader processes and then some other processes. A simple scheduling mechanism will do the following: run the writers, then the readers. The issues is that all the extra readers will do useless work, because the read pipe is empty. It will finally do the other processes at the end. This is an issue because we are wasting time running all the read processes when they do useless work and simply waste CPU time. In the next lecture we will discuss how to skip past the unneeded reader processes. </p>
+
+
+
+
+
+
+
 			</div>
 		</div>
 	</div>
