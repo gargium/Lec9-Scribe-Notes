@@ -59,9 +59,9 @@
 					<h5>On multiple processors</h5>
 						<p>With multiple processors, races between threads become more prevalent since multiple cores are executing code at the same time. Consider an implementation of pipes from scratch, without using the linux system call:</p>
 						<pre><code>struct pipe {
-						char buf[1024] //arbitrary length
-						unsigned r, w; //read and write pointers that indicate where in the buffer we should read or write from
-						} </code></pre>
+	char buf[1024] //arbitrary length
+	unsigned r, w; //read and write pointers that indicate where in the buffer we should read or write from
+} </code></pre>
 						<p>Assume that the buffer is circular, so that when a read or write pointer hits the end of the buffer it continues from the beginning. However, this code is not entirely correct, because we can't tell an empty pipe from a full one. So, instead of accessing r and w directly as indexes into the buffer (where their values would range from 0 to 1023), we make their values between 0 and UINT_MAX. Then if a pointer r or w % 1024 is 0, the pipe is empty, and if it is 1 (or higher), the pipe is full. The following code will tell us how many spots are in the buffer:</p>
 						<pre><code>(w - r) % 2014)) </pre></code> 
 						<h6>NOTE TO SELF: USE DIAGRAMS TO EXPLAIN WHATS GOING ON WITH THE BUFFER AND POINTERS HERE. CHECK 38:00 and 39:23 REMAINING IN THE VIDEO</h6>	
