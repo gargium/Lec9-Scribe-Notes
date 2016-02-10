@@ -152,11 +152,53 @@ void unlock (lock_t *l) {
 
 						<!--ADD ALL CODE BELOW THIS POINT, AND WITHIN THIS DIV--> 
 						<!--ROHAN'S SECTION:-->
+						<h4>Spin Locks</h4>
+							<p>If you look at the machine code generated for a 128 bit integer, you’ll notice that the machine registers are either only 64 or 32 bits wide (depending on the machine). This is implemented by gcc by using a pair of instructions. </p>
+							<p>Example: Suppose we run the following:</p>
+								<pre><code>*x = 0</code></pre>
+							<p>And then we look at the machine instructions, we see:</p>
+								<pre><code>movq<br>movq</code></pre>
 
+							<p>There’s 2 64 bit instructions. This will cause a problem with our implementation of unlock. Why? There can be a race condition in between the two instructions. Thus, spin locks should not be too large.
+							</p>
 
+							<h5>Bit Fields</h5>
+								<p>Spin locks should also not be too small. Contrary to belief, <code>char</code> is not the smallest variable type in C. You can actually declare a smaller variable. You can do the following:</p>
+								<pre><code>struct pipe{ <br>	unsigned char lock:1; //this is called a bit field <br>}
+								</code></pre>
+								<p>The way this is implemented, is that the compiler picks out a single bit in it’s next memory location and says “That’s the bit that corresponds to my lock field.”</p>
+								<p>Whenever you access this bit, it loads the corresponding byte, shifts it the correct amount and spits out the correct bit. Whenever you store the bit, it loads the value of the byte, changes the bit to what you wanted, and then does a corresponding store. But can you see a problem? There can be a race condition from the time you load the byte to the time you store the byte. Thus bit fields are also bad for this.</p>
 
+							<h5>Spin Lock Sizes</h5>
+								<p>How big should you make your spin lock? It depends on the hardware. On the x86 and x86-64, <code>int</code> works. 32 bit accesses are atomic as long as they’re aligned. The integers have to be on addresses of 4 so they are properly aligned.</p>
 
-
+						<h4>How are we going to get locks to work?</h4>
+							<h5>incl</h5>
+							<p>We need extra instructions for atomic access for “int”. The x86 and x86-64 have the following instruction (<code>x</code> is the address somewhere in memory):</p>
+							<pre><code>lock incl x</code></pre>
+							<p><i>Note:</i> <i><code>lock</code> is an instruction prefix, so this is still a single instruction. All it means is “grab <code>x</code>’s value out of memory, add 1, and store the result. This is all done atomically.”</i></p>
+							<p>Cache coherency code knows about this. So if a CPU is executing this instruction, it sends out a warning across the bus saying that it’s going to add 1 to this location. Thus nothing else can access with this piece of memory while the change is happening. This will slow things down, but it is reliable. If 2 CPUs execute this instruction at the same time, 2 will be added to that location. </p>
+							<p>But can we implement locks based on this instruction? Technically yes, but it’s a big hassle and not enough to do general purpose locking.</p>
+							<h5>xchgl</h5>
+							<p>Another instruction we can use is the following (<code>r</code> being a register and <code>x</code> being a memory location):</p>
+							<pre><code>xchgl r,x</code></pre>
+							<p>It simply moves the contents of <code>x</code> into the register and the contents of the register into <code>x</code>. It does this atomically. If 2 different cores execute this at about the same time, it will act as if one happened first, and the other happened second. It won’t step on the other’s toes. Let's look at the following function:</p>
+							<pre><code>int xchgl(int* p, int val){<br>	int old = *p;<br>	*p = val;<br>	return old;<br>}</code></pre>
+							<p><i>Note: This isn’t actually how the instruction is implemented. It’s implemented using asm atomically.</i> </p>
+							<p>Using this function, we can write the following locking function:</p>
+							<pre><code>void lock(int* l){<br>	while(xchgl(l,1)); //sets the lock to 1<br>		continue; //checks the old value and if it was 1, that means someone else has the lock, so it needs to keep going<br>}</code></pre>
+							<p>Thus <code>xchgl</code> allows for correct locking functionality.</p>
+							<p>So if we wanted to write code that set <code>x = f(x)</code>, assuming <code>f(x)</code> is a simple function, we could also use <code>xchgl</code>. This is seen through the following code:</p>
+							<pre><code>int old = x;<br>int new = f(x);<br>while(xchgl(&x,new) != old)<br>	continue;</code></pre>
+							<p>But there’s a major bug in this code. After old is loaded to the value of <code>x</code>, by the time it’s invoked <code>xchgl</code>, something could have changed the value of <code>x</code>. Even when it’s made the mistake, it’s changed the value to <code>new</code> even though the old value is wrong. Furthermore, when it discovers <code>old</code> is wrong, it keeps looping, waiting for someone else to change <code>x</code> to be the old value. </p>
+							<h5>Compare-and-Swap</h5>
+							<p>In this scenario we have another instruction: <i>compare-and-swap.</i></p>
+							<pre><code>cas</code></pre>
+							<p>The following is it's C implementation:</p>
+							<pre><code>bool cas(int* p, int old, int new){<br>	if(*p == old){<br>		*p = new;<br>		return true;<br>	}<br>	return false;<br>}</code></pre>
+							<p>This is a single instruction, so you can execute it and it will work atomically across multiple cores. We can also implement our <code>x = f(x)</code> primitive as follows:</p>
+							<pre><code>while(true)<br>	int old = x;<br>	int new = f(x);<br>	if(cas(&x,old,new))<br>		break;</code></pre>
+							<p><i>Note: Keep in mind, this code doesn’t care if</i> <code>x</code> <i>is changed by another issue. It will just keep looping.</i></p>
 			</div>
 		</div>
 	</div>
