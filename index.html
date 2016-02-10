@@ -58,7 +58,7 @@
 						</ol> 
 					<h5>On multiple processors</h5>
 						<p>With multiple processors, races between threads become more prevalent since multiple cores are executing code at the same time. Consider an implementation of pipes from scratch, without using the linux system call:</p>
-						</pre><code>struct pipe {
+						<pre><code>struct pipe {
 						char buf[1024] //arbitrary length
 						unsigned r, w; //read and write pointers that indicate where in the buffer we should read or write from
 						} </code></pre>
