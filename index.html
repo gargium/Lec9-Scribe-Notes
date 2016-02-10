@@ -123,10 +123,12 @@ void lock (lock_t *l) {
 //postcondition: we don't have the lock
 void unlock (lock_t *l) {
 	*l = 0; 
-}
+}</pre></code>
 							<p>But we now have to worry about races, because this is just ordinary code that any thread can execute in user mode. There's a race condition right after the while ends, because some other thread might come out of the loop at the same exact time we do, both will grab the lock and set l to 1, and later down the road we'll get a deadlock. We get out of this by asking the hardware people to help us out.</p>    
 							<p>PROS: Harder, because of race conditions described above.</p>
 							<p>CONS: Faster than using an ordinary system call.</p>
+
+				<h4>Hardware Answers - Caching</h4>
 
 
 
