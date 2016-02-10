@@ -46,69 +46,68 @@
   unlock(from);
 }</code></pre>
 				<p>Alright, now it looks like we're in better shape, but unfortunately we still have some problems. We're holding two locks at the same time. What happens when we've got a lock on account A and we are about to lock account B as well, but another thread has already locked B and is waiting for A? This situation is called <i>deadlock</i>. Following the goldilocks principle has the potential to create deadlock like this.</p>
-				
 				<h4>Critical Section Implementation</h4>
 					<h5>On a single processor</h5>
 						<p>We want our critical section to small enough so that it doesn't interfere with performance, but big enough so that it doesn't introduce races in our code. On a single processor, this isn't difficult, because there aren't any other cores or threads that we are competing with. Using the bank analogy example, consider when we want to deposit money into our account. This might look something like this:</p>
-						<pre><code>balance += amt; </code></pre>
+						<pre><code>balance += amt;</code></pre>
 						<p>But an increment is actually a couple of instructions in machine language (we have to load the balance, increment it, and store it), so we need to make sure that all of these instructions complete and are not interrupted in the middle. On a single CPU machine, we can do it by:</p>
-						<ol style="padding-left: 5%; padding-right: 5%">	
-							<li>Disabling interrupts temporarily - if we disable the clock interrupt on our machine, the kernel won't give the CPU to some other thread and we can complete this task before we switch threads. 
-							<li>Cooperative multitasking - we execute no instructions when entering or exiting the criical section and ensure that the CPU is not given up in the middle of a critical section. 
-						</ol> 
+						<ol style="padding-left: 5%; padding-right: 5%">
+							<li>Disabling interrupts temporarily - if we disable the clock interrupt on our machine, the kernel won't give the CPU to some other thread and we can complete this task before we switch threads.</li>
+							<li>Cooperative multitasking - we execute no instructions when entering or exiting the criical section and ensure that the CPU is not given up in the middle of a critical section.</li>
+						</ol>
 					<h5>On multiple processors</h5>
 						<p>With multiple processors, races between threads become more prevalent since multiple cores are executing code at the same time. Consider an implementation of pipes from scratch, without using the linux system call:</p>
 						<pre><code>struct pipe {
-	char buf[1024]; //arbitrary length
-	unsigned r, w; //read and write pointers that indicate where in the buffer we should read or write from
+  char buf[1024]; //arbitrary length
+  unsigned r, w; //read and write pointers that indicate where in the buffer we should read or write from
 } </code></pre>
 						<p>Assume that the buffer is circular, so that when a read or write pointer hits the end of the buffer it continues from the beginning. However, this code is not entirely correct, because we can't tell an empty pipe from a full one. So, instead of accessing r and w directly as indexes into the buffer (where their values would range from 0 to 1023), we make their values between 0 and UINT_MAX. Then if a pointer r or w % 1024 is 0, the pipe is empty, and if it is 1 (or higher), the pipe is full. The following code will tell us how many spots are in the buffer:</p>
-						<pre><code>(w - r) % 2014)) </pre></code> 
-						<h6>NOTE TO SELF: USE DIAGRAMS TO EXPLAIN WHATS GOING ON WITH THE BUFFER AND POINTERS HERE. CHECK 38:00 and 39:23 REMAINING IN THE VIDEO</h6>	
+						<pre><code>(w - r) % 2014</pre></code>
+						<h6>NOTE TO SELF: USE DIAGRAMS TO EXPLAIN WHATS GOING ON WITH THE BUFFER AND POINTERS HERE. CHECK 38:00 and 39:23 REMAINING IN THE VIDEO</h6>
 						<p>Now, we have to create primitives that can access the pipe. To keep it simple, we force reads and writes to be 1 byte at a time. </p>
 						<pre><code>bool write_pipe(struct pipe *p, char c) {
-	if (p->w - p->r == 1024) //check to make sure the pipe isn't full. 
-		return false; 
-	//will increment write pointer and mod by 1024 so we can index the buf appropriately
-	p->buf[p->w++%1024] = c; 
-	return true; 
+  if (p->w - p->r == 1024) //check to make sure the pipe isn't full.
+    return false;
+  //will increment write pointer and mod by 1024 so we can index the buf appropriately
+  p->buf[p->w++%1024] = c;
+  return true;
 } </code></pre>
 						<pre><code>int read_pipe(struct pipe *p) {
-	//if the pipe is empty, return an int that can't represented so the caller knows its an error. 
-	if (p->w == p->r)
-		return CHAR_MIN - 1; 
-	return p->buf[p->r++%1024];
+  //if the pipe is empty, return an int that can't represented so the caller knows its an error.
+  if (p->w == p->r)
+    return CHAR_MIN - 1;
+  return p->buf[p->r++%1024];
 }</code></pre>
-						<p>On a threaded system, though, concurrency introduces the problem of scheduling reads and writes. Consider the problem of Thread A is trying to write to the pipe at the same time that Thread B is reading from it. We can fix this by using <i>spinlocks</i>, so that if one thread has the lock, the other threads will have to wait to edit the pipe until that thread releases the lock. The other threads will keep chewing up CPU time until one is allowed to grab the lock. We must add a lock field to our pipe struct, since each pipe will have its own lock that lets it be modified or not.</p> 
+						<p>On a threaded system, though, concurrency introduces the problem of scheduling reads and writes. Consider the problem of Thread A is trying to write to the pipe at the same time that Thread B is reading from it. We can fix this by using <i>spinlocks</i>, so that if one thread has the lock, the other threads will have to wait to edit the pipe until that thread releases the lock. The other threads will keep chewing up CPU time until one is allowed to grab the lock. We must add a lock field to our pipe struct, since each pipe will have its own lock that lets it be modified or not.</p>
 						<pre><code>struct pipe {
-	char buf[1024];
-	unsigned r, w;
-	lock_t l;  
+  char buf[1024];
+  unsigned r, w;
+  lock_t l;
 } </code></pre>
 						<pre><code>bool write_pipe(struct pipe *p, char c) {
-	lock(&p->l);
-	bool full = p->w - p->r == 1024;
-	if (!full)
-		p->buf[p->w++%1024] = c;
-	unlock(&p->l);
-	return !full; 
+  lock(&p->l);
+  bool full = p->w - p->r == 1024;
+  if (!full)
+     p->buf[p->w++%1024] = c;
+  unlock(&p->l);
+  return !full;
 }</code></pre>
 						<p></p>
 						<pre><code>void read_pipe(struct pipe *p) {
-	lock(&p->l);
-	char c;
-	if (p->r == p->w) 
-		c = p->buf[p->r++%1024];
-	else
-		c = CHAR_MIN - 1;
-	unlock(&p->l);
-	return c;
+  lock(&p->l);
+  char c;
+  if (p->r == p->w)
+    c = p->buf[p->r++%1024];
+  else
+    c = CHAR_MIN - 1;
+  unlock(&p->l);
+  return c;
 }</code></pre>
 						<p>But how do we actually implement locks?</p>
 				<h4>Lock Implementation</h4>
 						<p>We can implement locks as either system calls or as plain machine code.</p>
 						<h5>System Calls</h5>
-							<p>The kernel will trap each time you want to acquire a lock or release a lock, figure out what other threads are interested in that same lock, and arbitrate. It will let you release your lock and grant it to another thread that wants it, and it will let you acquire a lock if possible. 
+							<p>The kernel will trap each time you want to acquire a lock or release a lock, figure out what other threads are interested in that same lock, and arbitrate. It will let you release your lock and grant it to another thread that wants it, and it will let you acquire a lock if possible.
 							<p>PROS: Easy to implement</p>
 							<p>CONS: Slow because of the numerous times we have to switch between user and kernel mode</p>
 						<h5>Regular Code</h5>
@@ -118,18 +117,18 @@
 //convention: l = 0 is unlocked, and l = 1 is locked
 typedef char lock_t;
 void lock (lock_t *l) {
-	while (*l)
-		continue;
-	*l = 1;
-	return; 
+  while (*l)
+    continue;
+  *l = 1;
+  return;
 }</code></pre>
 							<p></p>
 							<pre><code>//precondition: we have the lock
 //postcondition: we don't have the lock
 void unlock (lock_t *l) {
-	*l = 0; 
+  *l = 0;
 }</pre></code>
-							<p>But we now have to worry about races, because this is just ordinary code that any thread can execute in user mode. There's a race condition right after the while ends, because some other thread might come out of the loop at the same exact time we do, both will grab the lock and set l to 1, and later down the road we'll get a deadlock. We get out of this by asking the hardware people to help us out.</p>    
+							<p>But we now have to worry about races, because this is just ordinary code that any thread can execute in user mode. There's a race condition right after the while ends, because some other thread might come out of the loop at the same exact time we do, both will grab the lock and set l to 1, and later down the road we'll get a deadlock. We get out of this by asking the hardware people to help us out.</p>
 							<p>PROS: Harder, because of race conditions described above.</p>
 							<p>CONS: Faster than using an ordinary system call.</p>
 
@@ -138,19 +137,15 @@ void unlock (lock_t *l) {
 
 							<h6>NOTE TO SELF: INSERT A DIAGRAM ABOUT CACHE BEING BETWEEN CPU AND RAM, AND HOW A LOAD FROM CPU WORKS IN TERMS OF CACHE HITS OR MISSES.</h6>
 
-							<p>This creates a problem. Setting the value of the lock only flips a single byte to 0 or 1 in the cache. At some later point in time, the entire cache will be sent out to RAM, but what if a thread alters the value of the lock when the updated value is in one core's cache, but not in RAM? Other cores cannot see each others caches, so when they check RAM, they may or may not see the most accurate value. Thus, we must have cache coherence. 
-							<h6>NOTE TO SELF: DIAGRAM OF WHAT A CACHE LOOKS LIKE, AND REWRITING ONE BYTE FOR THE LOCK. (4:50 LEFT IN THE VIDEO)			
+							<p>This creates a problem. Setting the value of the lock only flips a single byte to 0 or 1 in the cache. At some later point in time, the entire cache will be sent out to RAM, but what if a thread alters the value of the lock when the updated value is in one core's cache, but not in RAM? Other cores cannot see each others caches, so when they check RAM, they may or may not see the most accurate value. Thus, we must have cache coherence.
+							<h6>NOTE TO SELF: DIAGRAM OF WHAT A CACHE LOOKS LIKE, AND REWRITING ONE BYTE FOR THE LOCK. (4:50 LEFT IN THE VIDEO)
 
 						<h5>Cache Coherence</h5>
 							<p>Coherency is when other caches notice that one cache has changed something in the RAM. CPUs must snoop the bus for any CPU-Ram traffic, and invalidate their own cache each time they see a core talking to RAM in some area that they have cached. Thus, the caches will turn off and the CPU will interface with RAM, which is slower, but only some of the time. Ideally, we need a single instruction that can assign the lock and handle arbitration of the lock at the machine level.</p>
 
-							<h6>NOTE: INSERT A DIAGRAM ABOUT A CPU LOOKING AT OTHER CPU TRAFFIC BETWEEN CACHE AND RAM ON THE BUS, AND INVALIDATING CACHE WHEN IT SEES TRAFFIC. 
+							<h6>NOTE: INSERT A DIAGRAM ABOUT A CPU LOOKING AT OTHER CPU TRAFFIC BETWEEN CACHE AND RAM ON THE BUS, AND INVALIDATING CACHE WHEN IT SEES TRAFFIC.
 
-
-
-
-
-						<!--ADD ALL CODE BELOW THIS POINT, AND WITHIN THIS DIV--> 
+						<!--ADD ALL CODE BELOW THIS POINT, AND WITHIN THIS DIV-->
 						<!--ROHAN'S SECTION:-->
 						<h4>Spin Locks</h4>
 							<p>If you look at the machine code generated for a 128 bit integer, you’ll notice that the machine registers are either only 64 or 32 bits wide (depending on the machine). This is implemented by gcc by using a pair of instructions. </p>
@@ -164,7 +159,9 @@ void unlock (lock_t *l) {
 
 							<h5>Bit Fields</h5>
 								<p>Spin locks should also not be too small. Contrary to belief, <code>char</code> is not the smallest variable type in C. You can actually declare a smaller variable. You can do the following:</p>
-								<pre><code>struct pipe{ <br>	unsigned char lock:1; //this is called a bit field <br>}
+								<pre><code>struct pipe {
+  unsigned char lock:1; //this is called a bit field
+}
 								</code></pre>
 								<p>The way this is implemented, is that the compiler picks out a single bit in it’s next memory location and says “That’s the bit that corresponds to my lock field.”</p>
 								<p>Whenever you access this bit, it loads the corresponding byte, shifts it the correct amount and spits out the correct bit. Whenever you store the bit, it loads the value of the byte, changes the bit to what you wanted, and then does a corresponding store. But can you see a problem? There can be a race condition from the time you load the byte to the time you store the byte. Thus bit fields are also bad for this.</p>
@@ -184,29 +181,49 @@ void unlock (lock_t *l) {
 							<p>Another instruction we can use is the following (<code>r</code> being a register and <code>x</code> being a memory location):</p>
 							<pre><code>xchgl r,x</code></pre>
 							<p>It simply moves the contents of <code>x</code> into the register and the contents of the register into <code>x</code>. It does this atomically. If 2 different cores execute this at about the same time, it will act as if one happened first, and the other happened second. It won’t step on the other’s toes. Let's look at the following function:</p>
-							<pre><code>int xchgl(int* p, int val){<br>	int old = *p;<br>	*p = val;<br>	return old;<br>}</code></pre>
+							<pre><code>int xchgl(int* p, int val) {
+  int old = *p;
+  *p = val;
+  return old;
+}</code></pre>
 							<p><i>Note: This isn’t actually how the instruction is implemented. It’s implemented using asm atomically.</i> </p>
 							<p>Using this function, we can write the following locking function:</p>
-							<pre><code>void lock(int* l){<br>	while(xchgl(l,1)); //sets the lock to 1<br>		continue; //checks the old value and if it was 1, that means someone else has the lock, so it needs to keep going<br>}</code></pre>
+							<pre><code>void lock(int* l) {
+  while(xchgl(l,1)); //sets the lock to 1
+    continue; //checks the old value and if it was 1, that means someone else has the lock, so it needs to keep going
+}</code></pre>
 							<p>Thus <code>xchgl</code> allows for correct locking functionality.</p>
 							<p>So if we wanted to write code that set <code>x = f(x)</code>, assuming <code>f(x)</code> is a simple function, we could also use <code>xchgl</code>. This is seen through the following code:</p>
-							<pre><code>int old = x;<br>int new = f(x);<br>while(xchgl(&x,new) != old)<br>	continue;</code></pre>
+							<pre><code>int old = x;
+int new = f(x);
+while(xchgl(&x,new) != old)
+  continue;</code></pre>
 							<p>But there’s a major bug in this code. After old is loaded to the value of <code>x</code>, by the time it’s invoked <code>xchgl</code>, something could have changed the value of <code>x</code>. Even when it’s made the mistake, it’s changed the value to <code>new</code> even though the old value is wrong. Furthermore, when it discovers <code>old</code> is wrong, it keeps looping, waiting for someone else to change <code>x</code> to be the old value. </p>
 							<h5>Compare-and-Swap</h5>
 							<p>In this scenario we have another instruction: <i>compare-and-swap.</i></p>
 							<pre><code>cas</code></pre>
 							<p>The following is it's C implementation:</p>
-							<pre><code>bool cas(int* p, int old, int new){<br>	if(*p == old){<br>		*p = new;<br>		return true;<br>	}<br>	return false;<br>}</code></pre>
+							<pre><code>bool cas(int* p, int old, int new) {
+  if (*p == old) {
+    *p = new;
+    return true;
+  }
+  return false;
+}</code></pre>
 							<p>This is a single instruction, so you can execute it and it will work atomically across multiple cores. We can also implement our <code>x = f(x)</code> primitive as follows:</p>
-							<pre><code>while(true)<br>	int old = x;<br>	int new = f(x);<br>	if(cas(&x,old,new))<br>		break;</code></pre>
+							<pre><code>while (1)
+  int old = x;
+  int new = f(x);
+  if (cas(&x,old,new))
+    break;</code></pre>
 							<p><i>Note: Keep in mind, this code doesn’t care if</i> <code>x</code> <i>is changed by another issue. It will just keep looping.</i></p>
 
 
 						<!--NAQ'S SECTION:-->
 					<h5> Locking with Pipes </h5>
 						<pre><code> struct pipe{
-	char buf[1024]; // data 
-	lock_t l;
+  char buf[1024]; // data
+  lock_t l;
 }</code></pre>
 
 						<p> There are no locks in the data section of the pipe structure but the access to the data are protected by the accesses to the locks. In order to access the locks you use the machine intructions above such as compare and swap. </p>
@@ -216,10 +233,10 @@ void unlock (lock_t *l) {
 						<p> In order to save memory, suppose we change the implementation of the pipe to the following: </p>
 
 						<pre><code> struct pipe{
-	char buf[1024]; // data
+  char buf[1024]; // data
 }
 lock_t global_lock;</code></pre>
-						<p> The readpipe and writepipe will work the same way as before. However, the only difference with this new implementation of the pipe struct is that the lock and unlock calls will use the global_lock. The critical section will still go between the lock and unlock calls similar to the original implemenation. This approach of using a single global lock for all pipes is called <b>course-grained locking. </b></p> 
+						<p> The readpipe and writepipe will work the same way as before. However, the only difference with this new implementation of the pipe struct is that the lock and unlock calls will use the global_lock. The critical section will still go between the lock and unlock calls similar to the original implemenation. This approach of using a single global lock for all pipes is called <b>course-grained locking. </b></p>
 						<ul style="padding-left: 5%; padding-right: 5%">
 							<li> Advantage: Since there is only one lock for all pipes, this method is very easy to understand and implement. </li>
 							<li> Disadvantage: Using a global lock impacts perfomance by making the code slow. Also, access to the global lock becomes a performance bottleneck because anybody currently working on a pipe will prevent others from accessing that pipe. </li>
@@ -229,41 +246,32 @@ lock_t global_lock;</code></pre>
 
 						<p> Now consider a new pipe struct that has two locks; one for read access and one for write access.</p>
 						<pre><code> struct pipe{
-	char buf[1024]; // data
-	unsigned r, w;
-	lock_t rl; // read lock
-	lock_t wl; // write lock
+  char buf[1024]; // data
+  unsigned r, w;
+  lock_t rl; // read lock
+  lock_t wl; // write lock
 }</code></pre>
 
 						<p> In this case, the readpipe will add 1 to the r pointer and the writepipe will add 1 to the w pointer. In theory a reader from the pipe will not interfere with any writers fromt he pipe, so you can read and write from a pipe at the same time. <b> However </b> there is an error in this reasoning. The read and write pipes both need to look at the r and w values, so using two locks in each pipe struct will not work. Possibly if you are able to partition your data structure into two sucomponenets, then this method might make sense, but generally using two locks in a pipe struct is not good coding practice. Overall the most typical pattern for using locks is to have one lock per struct. </p>
 
 						<p> Now going back to the original pipe struct with one non-global lock. </p>
 						<pre><code> struct pipe{
-	char buf[1024]; // data
-	unsigned r, w;
-	lock_t l;
+  char buf[1024]; // data
+  unsigned r, w;
+  lock_t l;
 }</code></pre>
 
 						<p> One issue with this approach is when you try to access a pipe, it will use up a lot of CPU time. For example, suppose there are many readers and a few writers. Here is the code that the readers will run: </p>
-						<pre><code> 
-	while((c = read_pipe) == CHAR_MIN-1)
-		continue; 
+						<pre><code>while ((c = read_pipe) == CHAR_MIN-1)
+  continue;
 }</code></pre>
 
 						<p> If there are a lot more readers than writers, then the readers will continue to read from pipes even though there is no data that needs to be read. Therefore the readers are unneccessarily using up CPU time. In order to fix this issue of using up unneeded CPU time, we can use the yield() as follows: </p>
-						<pre><code> 
-	while((c = read_pipe) == CHAR_MIN-1)
-		yield(); 
+						<pre><code>while((c = read_pipe) == CHAR_MIN-1)
+  yield();
 }</code></pre>
 
 						<p> The yield call tells the CPU to switch to a different thread that will do more useful work. However even using the yield call will cause some issues. For example consider a case where there are some writer processes, reader processes and then some other processes. A simple scheduling mechanism will do the following: run the writers, then the readers. The issues is that all the extra readers will do useless work, because the read pipe is empty. It will finally do the other processes at the end. This is an issue because we are wasting time running all the read processes when they do useless work and simply waste CPU time. In the next lecture we will discuss how to skip past the unneeded reader processes. </p>
-
-
-
-
-
-
-
 			</div>
 		</div>
 	</div>
