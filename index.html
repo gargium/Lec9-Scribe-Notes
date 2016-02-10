@@ -65,7 +65,20 @@
 						<p>Assume that the buffer is circular, so that when a read or write pointer hits the end of the buffer it continues from the beginning. However, this code is not entirely correct, because we can't tell an empty pipe from a full one. So, instead of accessing r and w directly as indexes into the buffer (where their values would range from 0 to 1023), we make their values between 0 and UINT_MAX. Then if a pointer r or w % 1024 is 0, the pipe is empty, and if it is 1 (or higher), the pipe is full. The following code will tell us how many spots are in the buffer:</p>
 						<pre><code>(w - r) % 2014)) </pre></code> 
 						<h6>NOTE TO SELF: USE DIAGRAMS TO EXPLAIN WHATS GOING ON WITH THE BUFFER AND POINTERS HERE. CHECK 38:00 and 39:23 REMAINING IN THE VIDEO</h6>	
-			
+						<p>Now, we have to create primitives that can access the pipe. To keep it simple, we force reads and writes to be 1 byte at a time. </p>
+						<pre><code>bool write_pipe(struct pipe *p, char c) {
+	if (p->w - p->r == 1024) //check to make sure the pipe isn't full. 
+		return false; 
+	p->buf[p->w++%1024] = c; //will increment write pointer and mod by 1024 so we can index the buf appropriately
+	return true; 
+} </code></pre>
+						<pre><code>int read_pipe(struct pipe *p) {
+	if (p->w == p->r)
+		return CHAR_MIN - 1; //if the pipe is emty, return an int that can't represented so the caller knows its an error. 
+	return p->buf[p->r++%1024];
+}</code></pre>
+						<p>On a threaded system, though, there's a ton of things that can go wrong. 
+
 
 
 
