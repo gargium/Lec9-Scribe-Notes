@@ -134,6 +134,17 @@ void unlock (lock_t *l) {
 							<p>CONS: Faster than using an ordinary system call.</p>
 
 				<h4>Hardware Answers - Caching</h4>
+							<p>When accessing memory (RAM), there is actually a cache that sits between the CPU and the RAM, and because cache is around 100x faster than RAM, it speeds up memory withdrawals considerably. When the system needs to load, it'll go and get the value from cache rather than from RAM. If its not in cache, it'll find it from RAM. Caches are 32 bytes wide, so a typical load at the hardware level will get 32 bytes at a time. </p>
+
+							<h6>NOTE TO SELF: INSERT A DIAGRAM ABOUT CACHE BEING BETWEEN CPU AND RAM, AND HOW A LOAD FROM CPU WORKS IN TERMS OF CACHE HITS OR MISSES.</h6>
+
+							<p>This creates a problem. Setting the value of the lock only flips a single byte to 0 or 1 in the cache. At some later point in time, the entire cache will be sent out to RAM, but what if a thread alters the value of the lock when the updated value is in one core's cache, but not in RAM? Other cores cannot see each others caches, so when they check RAM, they may or may not see the most accurate value. Thus, we must have cache coherence. 
+							<h6>NOTE TO SELF: DIAGRAM OF WHAT A CACHE LOOKS LIKE, AND REWRITING ONE BYTE FOR THE LOCK. (4:50 LEFT IN THE VIDEO)			
+
+						<h5>Cache Coherence</h5>
+							<p>Coherency is when other caches notice that one cache has changed something in the RAM. CPUs must snoop the bus for any CPU-Ram traffic, and invalidate their own cache each time they see a core talking to RAM in some area that they have cached. Thus, the caches will turn off and the CPU will interface with RAM, which is slower, but only some of the time. Ideally, we need a single instruction that can assign the lock and handle arbitration of the lock at the machine level.</p>
+
+							<h6>NOTE: INSERT A DIAGRAM ABOUT A CPU LOOKING AT OTHER CPU TRAFFIC BETWEEN CACHE AND RAM ON THE BUS, AND INVALIDATING CACHE WHEN IT SEES TRAFFIC. 
 
 
 
