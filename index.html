@@ -99,7 +99,28 @@
 	unlock(&p->l);
 	return c;
 }</code></pre>
-					
+						<p>But how do we actually implement locks?</p>
+				<h4>Lock Implementation</h4>
+						<p>We can implement locks as either system calls or as plain machine code.</p>
+						<h5>System Calls</h5>
+							<p>The kernel will trap each time you want to acquire a lock or release a lock, figure out what other threads are interested in that same lock, and arbitrate. It will let you release your lock and grant it to another thread that wants it, and it will let you acquire a lock if possible. 
+							<p>PROS: Easy to implement</p>
+							<p>CONS: Slow because of the numerous times we have to switch between user and kernel mode</p>
+						<h5>Regular Code</h5>
+							<p>We can implement locks using simple locking and unlocking methods:</p>
+							<pre><code>//precondition: we don't have a lock
+//postcondition: we have a lock
+//convention: l = 0 is unlocked, and l = 1 is locked
+typedef char lock_t;
+void lock (lock_t *l) {
+	while (*l)
+		continue;
+	*l = 1;
+	return; 
+}</code></pre>
+							<p>But we now have to worry about races, because this is just ordinary code that any thread can execute in user mode. There's a race condition right after the while ends, because some other thread might come out of the loop at the same exact time we do, both will grab the lock and set l to 1, and later down the road we'll get a deadlock. We get out of this by asking the hardware people to help us out.</p>    
+							<p>PROS: Harder, because of race conditions described above.</p>
+							<p>CONS: Faster than using an ordinary system call.</p>
 
 
 
