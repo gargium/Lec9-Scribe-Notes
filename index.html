@@ -65,6 +65,22 @@
 						<p>Assume that the buffer is circular, so that when a read or write pointer hits the end of the buffer it continues from the beginning. However, this code is not entirely correct, because we can't tell an empty pipe from a full one. So, instead of accessing r and w directly as indexes into the buffer (where their values would range from 0 to 1023), we make their values between 0 and UINT_MAX. Then if a pointer r or w % 1024 is 0, the pipe is empty, and if it is 1 (or higher), the pipe is full. The following code will tell us how many spots are in the buffer:</p>
 						<pre><code>(w - r) % 2014)) </pre></code> 
 						<h6>NOTE TO SELF: USE DIAGRAMS TO EXPLAIN WHATS GOING ON WITH THE BUFFER AND POINTERS HERE. CHECK 38:00 and 39:23 REMAINING IN THE VIDEO</h6>	
+			
+
+
+
+
+
+
+
+
+						<!--ADD ALL CODE BELOW THIS POINT, AND WITHIN THIS DIV--> 
+						<!--ROHAN'S SECTION:-->
+
+
+
+
+
 			</div>
 		</div>
 	</div>
