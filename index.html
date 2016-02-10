@@ -69,12 +69,14 @@
 						<pre><code>bool write_pipe(struct pipe *p, char c) {
 	if (p->w - p->r == 1024) //check to make sure the pipe isn't full. 
 		return false; 
-	p->buf[p->w++%1024] = c; //will increment write pointer and mod by 1024 so we can index the buf appropriately
+	//will increment write pointer and mod by 1024 so we can index the buf appropriately
+	p->buf[p->w++%1024] = c; 
 	return true; 
 } </code></pre>
 						<pre><code>int read_pipe(struct pipe *p) {
+	//if the pipe is empty, return an int that can't represented so the caller knows its an error. 
 	if (p->w == p->r)
-		return CHAR_MIN - 1; //if the pipe is emty, return an int that can't represented so the caller knows its an error. 
+		return CHAR_MIN - 1; 
 	return p->buf[p->r++%1024];
 }</code></pre>
 						<p>On a threaded system, though, there's a ton of things that can go wrong. 
