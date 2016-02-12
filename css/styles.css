@@ -1,0 +1,8 @@
+#pipeEnds {
+	background-image: url("../images/pipeEnds.png");
+	background-size: contain;
+	background-repeat: no-repeat;
+	height: 230px;
+	margin-left: 100px;
+	margin-right: 100px;
+}
