@@ -229,7 +229,7 @@ while(xchgl(&x,new) != old)
 
 						<p> There are no locks in the data section of the pipe structure but the access to the data are protected by the accesses to the locks. In order to access the locks you use the machine intructions above such as compare and swap. </p>
 
-						<p> Currently the way readpipe and writepipe work is by first using a lock. Then we run the code for that specific thread. After that code has been run we unlock. The code that goes in between the lock and unlock is the critical section. Suppose we have multiple threads trying to access the same pipe. We can generalize this by saying that if N threads are trying to access the same pipe, then N-1 threads will spin. When a thread is spinning, its CPU will stay busy becuase it is constantly issuing machine instructions. EXPLAIN THIS MORE!!!!! </p>
+						<p> Currently the way readpipe and writepipe work is by first using a lock. Then we run the code for that specific thread. After that code has been run we unlock. The code that goes in between the lock and unlock is the critical section. Suppose we have multiple threads trying to access the same pipe. We can generalize this by saying that if N threads are trying to access the same pipe, then N-1 threads will spin. When a thread is spinning, its CPU will stay busy becuase it is constantly issuing machine instructions. </p>
 
 						<p> In order to save memory, suppose we change the implementation of the pipe to the following: </p>
 
@@ -272,7 +272,9 @@ lock_t global_lock;</code></pre>
   yield();
 }</code></pre>
 
-						<p> The yield call tells the CPU to switch to a different thread that will do more useful work. However even using the yield call will cause some issues. For example consider a case where there are some writer processes, reader processes and then some other processes. A simple scheduling mechanism will do the following: run the writers, then the readers. The issues is that all the extra readers will do useless work, because the read pipe is empty. It will finally do the other processes at the end. This is an issue because we are wasting time running all the read processes when they do useless work and simply waste CPU time. In the next lecture we will discuss how to skip past the unneeded reader processes. </p>
+						<div id="procs"></div>
+
+						<p> The yield call tells the CPU to switch to a different thread that will do more useful work. However even using the yield call will cause some issues. For example consider a case where there are some writer processes, reader processes and then some other processes such as in the diagram above. A simple scheduling mechanism will do the following: run the writers, then the readers. The issues is that all the extra readers will do useless work, because the read pipe is empty. It will finally do the other processes at the end. This is an issue because we are wasting time running all the read processes when they do useless work and simply waste CPU time. In the next lecture we will discuss how to skip past the unneeded reader processes. </p>
 			</div>
 		</div>
 	</div>
