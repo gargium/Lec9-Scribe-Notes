@@ -7,6 +7,15 @@
 	margin-right: 100px;
 }
 
+#cacheDiagram {
+	background-image: url("../images/cache.png");
+	background-size: contain;
+	background-repeat: no-repeat;
+	height: 230px;
+	margin-left: 100px;
+	margin-right: 100px;
+}
+
 #procs {
 	background-image: url("../images/procs.jpg");
 	background-size: contain;
