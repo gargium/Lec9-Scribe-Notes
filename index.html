@@ -16,6 +16,71 @@
 				<h1>Lecture 9 Scribe Notes</h1>
 				<h5>CS 111 at UCLA | Winter 2016</h5>
 				<hr>
+				<h2> Table of Contents </h2>
+				<ul>
+					<li>
+						<a href="#goldilocks"> Goldilocks </a>
+					</li>
+					<li>
+						<a href="#critSection"> Critical Section Implementation </a>
+						<ul>
+							<li>
+								<a href="#single"> On a Single Processor </a>
+							</li>
+							<li>
+								<a href="#multiple"> On Multiple Processors </a>
+							</li>
+						</ul>
+
+					</li>
+					<li>
+						<a href="#locks"> Lock Implementation </a>
+						<ul>
+							<li>
+								<a href="#sysCalls"> System Calls </a>
+							</li>
+							<li>
+								<a href="#regCode"> Regular Code </a>
+							</li>
+						</ul>
+					</li>
+					<li>
+						<a href="#caching"> Hardware Answers - Caching </a>
+						<ul>
+							<li>
+								<a href="#cache"> Cache Coherence </a>
+							</li>
+							<li>
+								<a href="#spin"> Spin Locks </a>
+							</li>
+							<li>
+								<a href="#bitFields"> Bit Fields </a>
+							</li>
+							<li>
+								<a href="#sizes"> Spin Lock Sizes </a>
+							</li>
+						</ul>
+					</li>
+					<li>
+						<a href="#howItWorks"> How are we going to get locks to work? </a>
+						<ul>
+							<li>
+								<a href="#incl"> Incl </a>
+							</li>
+							<li>
+								<a href="#xchgl"> Xchgl </a>
+							</li>
+							<li>
+								<a href="#swap"> Compare-and-Swap </a>
+							</li>
+						</ul>
+					</li>
+					<li>
+						<a href="#pipes"> Locking with Pipes </a>
+					</li>
+				</ul>
+
+				<a name="goldilocks"></a>
 				<h4>Goldilocks</h4>
 				<p>In this lecture, we mostly talked about mechanisms for dealing with and avoiding race conditions. This is done with a <i>lock</i>. A lock is a variable that tells the machine whether or not it is allowed to execute a section of code. If one thread locks a section of code, other threads will not be able to enter that section of code until the first thread has unlocked it. These lockable sections of code are called <i>critical sections</i>. There are two important things to keep in mind when dealing with critical sections. (Well, there are a lot more than two, but we'll just focus on these two for now.)</p>
 				<ol style="padding-left: 5%; padding-right: 5%">
@@ -47,7 +112,9 @@
   unlock(from);
 }</code></pre>
 				<p>Alright, now it looks like we're in better shape, but unfortunately we still have some problems. We're holding two locks at the same time. What happens when we've got a lock on account A and we are about to lock account B as well, but another thread has already locked B and is waiting for A? This situation is called <i>deadlock</i>. Following the goldilocks principle has the potential to create deadlock like this.</p>
+				<a name="critSection"></a>
 				<h4>Critical Section Implementation</h4>
+					<a name="single"></a>
 					<h5>On a single processor</h5>
 						<p>We want our critical section to small enough so that it doesn't interfere with performance, but big enough so that it doesn't introduce races in our code. On a single processor, this isn't difficult, because there aren't any other cores or threads that we are competing with. Using the bank analogy example, consider when we want to deposit money into our account. This might look something like this:</p>
 						<pre><code>balance += amt;</code></pre>
@@ -56,6 +123,7 @@
 							<li>Disabling interrupts temporarily - if we disable the clock interrupt on our machine, the kernel won't give the CPU to some other thread and we can complete this task before we switch threads.</li>
 							<li>Cooperative multitasking - we execute no instructions when entering or exiting the criical section and ensure that the CPU is not given up in the middle of a critical section.</li>
 						</ol>
+					<a name="multiple"></a>
 					<h5>On multiple processors</h5>
 						<p>With multiple processors, races between threads become more prevalent since multiple cores are executing code at the same time. Consider an implementation of pipes from scratch, without using the linux system call:</p>
 						<pre><code>struct pipe {
@@ -105,12 +173,15 @@
   return c;
 }</code></pre>
 						<p>But how do we actually implement locks?</p>
+				<a name="locks"></a>
 				<h4>Lock Implementation</h4>
 						<p>We can implement locks as either system calls or as plain machine code.</p>
+						<a name="sysCalls"></a>
 						<h5>System Calls</h5>
 							<p>The kernel will trap each time you want to acquire a lock or release a lock, figure out what other threads are interested in that same lock, and arbitrate. It will let you release your lock and grant it to another thread that wants it, and it will let you acquire a lock if possible.
 							<p>PROS: Easy to implement</p>
 							<p>CONS: Slow because of the numerous times we have to switch between user and kernel mode</p>
+						<a name="regCode"></a>
 						<h5>Regular Code</h5>
 							<p>We can implement locks using simple locking and unlocking methods:</p>
 							<pre><code>//precondition: we don't have a lock
@@ -133,6 +204,7 @@ void unlock (lock_t *l) {
 							<p>PROS: Harder, because of race conditions described above.</p>
 							<p>CONS: Faster than using an ordinary system call.</p>
 
+				<a name="caching"></a>
 				<h4>Hardware Answers - Caching</h4>
 							<p>When accessing memory (RAM), there is actually a cache that sits between the CPU and the RAM, and because cache is around 100x faster than RAM, it speeds up memory withdrawals considerably. When the system needs to load, it'll go and get the value from cache rather than from RAM. If its not in cache, it'll find it from RAM. Caches are 32 bytes wide, so a typical load at the hardware level will get 32 bytes at a time. </p>
 
@@ -141,6 +213,7 @@ void unlock (lock_t *l) {
 							<p>This creates a problem. Setting the value of the lock only flips a single byte to 0 or 1 in the cache. At some later point in time, the entire cache will be sent out to RAM, but what if a thread alters the value of the lock when the updated value is in one core's cache, but not in RAM? Other cores cannot see each others caches, so when they check RAM, they may or may not see the most accurate value. Thus, we must have cache coherence.
 							<h6>NOTE TO SELF: DIAGRAM OF WHAT A CACHE LOOKS LIKE, AND REWRITING ONE BYTE FOR THE LOCK. (4:50 LEFT IN THE VIDEO)
 
+						<a name="cache"></a>
 						<h5>Cache Coherence</h5>
 							<p>Coherency is when other caches notice that one cache has changed something in the RAM. CPUs must snoop the bus for any CPU-Ram traffic, and invalidate their own cache each time they see a core talking to RAM in some area that they have cached. Thus, the caches will turn off and the CPU will interface with RAM, which is slower, but only some of the time. Ideally, we need a single instruction that can assign the lock and handle arbitration of the lock at the machine level.</p>
 
@@ -148,6 +221,7 @@ void unlock (lock_t *l) {
 
 						<!--ADD ALL CODE BELOW THIS POINT, AND WITHIN THIS DIV-->
 						<!--ROHAN'S SECTION:-->
+						<a name="spin"></a>
 						<h4>Spin Locks</h4>
 							<p>If you look at the machine code generated for a 128 bit integer, you’ll notice that the machine registers are either only 64 or 32 bits wide (depending on the machine). This is implemented by gcc by using a pair of instructions. </p>
 							<p>Example: Suppose we run the following:</p>
@@ -157,7 +231,7 @@ void unlock (lock_t *l) {
 
 							<p>There’s 2 64 bit instructions. This will cause a problem with our implementation of unlock. Why? There can be a race condition in between the two instructions. Thus, spin locks should not be too large.
 							</p>
-
+							<a name="bitFields"></a>
 							<h5>Bit Fields</h5>
 								<p>Spin locks should also not be too small. Contrary to belief, <code>char</code> is not the smallest variable type in C. You can actually declare a smaller variable. You can do the following:</p>
 								<pre><code>struct pipe {
@@ -167,17 +241,20 @@ void unlock (lock_t *l) {
 								<p>The way this is implemented, is that the compiler picks out a single bit in it’s next memory location and says “That’s the bit that corresponds to my lock field.”</p>
 								<p>Whenever you access this bit, it loads the corresponding byte, shifts it the correct amount and spits out the correct bit. Whenever you store the bit, it loads the value of the byte, changes the bit to what you wanted, and then does a corresponding store. But can you see a problem? There can be a race condition from the time you load the byte to the time you store the byte. Thus bit fields are also bad for this.</p>
 
+							<a name="sizes"></a>
 							<h5>Spin Lock Sizes</h5>
 								<p>How big should you make your spin lock? It depends on the hardware. On the x86 and x86-64, <code>int</code> works. 32 bit accesses are atomic as long as they’re aligned. The integers have to be on addresses of 4 so they are properly aligned.</p>
 
-
+						<a name="howItWorks"></a>
 						<h4>How are we going to get locks to work?</h4>
+							<a name="incl"></a>
 							<h5>incl</h5>
 							<p>We need extra instructions for atomic access for “int”. The x86 and x86-64 have the following instruction (<code>x</code> is the address somewhere in memory):</p>
 							<pre><code>lock incl x</code></pre>
 							<p><i>Note:</i> <i><code>lock</code> is an instruction prefix, so this is still a single instruction. All it means is “grab <code>x</code>’s value out of memory, add 1, and store the result. This is all done atomically.”</i></p>
 							<p>Cache coherency code knows about this. So if a CPU is executing this instruction, it sends out a warning across the bus saying that it’s going to add 1 to this location. Thus nothing else can access with this piece of memory while the change is happening. This will slow things down, but it is reliable. If 2 CPUs execute this instruction at the same time, 2 will be added to that location. </p>
 							<p>But can we implement locks based on this instruction? Technically yes, but it’s a big hassle and not enough to do general purpose locking.</p>
+							<a name="xchgl"></a>
 							<h5>xchgl</h5>
 							<p>Another instruction we can use is the following (<code>r</code> being a register and <code>x</code> being a memory location):</p>
 							<pre><code>xchgl r,x</code></pre>
@@ -200,6 +277,7 @@ int new = f(x);
 while(xchgl(&x,new) != old)
   continue;</code></pre>
 							<p>But there’s a major bug in this code. After old is loaded to the value of <code>x</code>, by the time it’s invoked <code>xchgl</code>, something could have changed the value of <code>x</code>. Even when it’s made the mistake, it’s changed the value to <code>new</code> even though the old value is wrong. Furthermore, when it discovers <code>old</code> is wrong, it keeps looping, waiting for someone else to change <code>x</code> to be the old value. </p>
+							<a name="swap"></a>
 							<h5>Compare-and-Swap</h5>
 							<p>In this scenario we have another instruction: <i>compare-and-swap.</i></p>
 							<pre><code>cas</code></pre>
@@ -221,7 +299,8 @@ while(xchgl(&x,new) != old)
 
 
 						<!--NAQ'S SECTION:-->
-					<h5> Locking with Pipes </h5>
+					<a name="pipes"></a>
+					<h4> Locking with Pipes </h4>
 						<pre><code> struct pipe{
   char buf[1024]; // data
   lock_t l;
